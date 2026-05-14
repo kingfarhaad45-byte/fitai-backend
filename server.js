@@ -17,7 +17,16 @@ app.use(express.json({ limit: "10mb" }));
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
+  .then(async () => {
+    console.log("✅ MongoDB connected");
+    // Drop old username index if exists
+    try {
+      await mongoose.connection.collection("users").dropIndex("username_1");
+      console.log("✅ Old index dropped");
+    } catch(e) {
+      // Index doesn't exist, that's fine
+    }
+  })
   .catch(e => console.error("❌ MongoDB error:", e));
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
