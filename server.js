@@ -17,16 +17,7 @@ app.use(express.json({ limit: "10mb" }));
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
 mongoose.connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log("✅ MongoDB connected");
-    // Drop old username index if exists
-    try {
-      await mongoose.connection.collection("users").dropIndex("username_1");
-      console.log("✅ Old index dropped");
-    } catch(e) {
-      // Index doesn't exist, that's fine
-    }
-  })
+  .then(() => console.log("✅ MongoDB connected"))
   .catch(e => console.error("❌ MongoDB error:", e));
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
@@ -213,6 +204,91 @@ app.get("/api/weight", auth, async (req, res) => {
 app.post("/api/weight", auth, async (req, res) => {
   try { res.json(await WeightLog.create({ weight:req.body.weight, userId:req.user.id })); }
   catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// ── Diet Meals (custom meal library per user) ─────────────────────────────────
+const DietMealSchema = new mongoose.Schema({
+  userId:   { type:mongoose.Schema.Types.ObjectId, ref:"User", required:true },
+  name:     String,
+  calories: Number,
+  protein:  Number,
+  carbs:    Number,
+  fat:      Number,
+  category: String,
+  isCustom: { type:Boolean, default:true },
+  createdAt:{ type:Date, default:Date.now }
+});
+
+const DietLogSchema = new mongoose.Schema({
+  userId:   { type:mongoose.Schema.Types.ObjectId, ref:"User", required:true },
+  mealId:   String,
+  mealName: String,
+  calories: Number,
+  protein:  Number,
+  carbs:    Number,
+  fat:      Number,
+  date:     { type:String, default:()=>new Date().toLocaleDateString() },
+  createdAt:{ type:Date, default:Date.now }
+});
+
+const DietMeal = mongoose.model("DietMeal", DietMealSchema);
+const DietLog  = mongoose.model("DietLog",  DietLogSchema);
+
+// GET /api/diet/meals - get user's custom meals
+app.get("/api/diet/meals", auth, async (req, res) => {
+  try {
+    const meals = await DietMeal.find({ userId:req.user.id }).sort({ createdAt:-1 });
+    res.json(meals);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// POST /api/diet/meals - add custom meal
+app.post("/api/diet/meals", auth, async (req, res) => {
+  try {
+    const meal = await DietMeal.create({ ...req.body, userId:req.user.id });
+    res.json(meal);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// DELETE /api/diet/meals/:id - delete custom meal
+app.delete("/api/diet/meals/:id", auth, async (req, res) => {
+  try {
+    await DietMeal.findOneAndDelete({ _id:req.params.id, userId:req.user.id });
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// GET /api/diet/log?date=today - get today's tracked meals
+app.get("/api/diet/log", auth, async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toLocaleDateString();
+    const logs = await DietLog.find({ userId:req.user.id, date }).sort({ createdAt:1 });
+    res.json(logs);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// POST /api/diet/log - track a meal (check it)
+app.post("/api/diet/log", auth, async (req, res) => {
+  try {
+    const log = await DietLog.create({ ...req.body, userId:req.user.id });
+    res.json(log);
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// DELETE /api/diet/log/:id - untrack a meal (uncheck it)
+app.delete("/api/diet/log/:id", auth, async (req, res) => {
+  try {
+    await DietLog.findOneAndDelete({ _id:req.params.id, userId:req.user.id });
+    res.json({ success:true });
+  } catch(e) { res.status(500).json({ error:e.message }); }
+});
+
+// GET /api/diet/log/week - get weekly diet summary
+app.get("/api/diet/log/week", auth, async (req, res) => {
+  try {
+    const logs = await DietLog.find({ userId:req.user.id }).sort({ createdAt:-1 }).limit(100);
+    res.json(logs);
+  } catch(e) { res.status(500).json({ error:e.message }); }
 });
 
 // ── Water ─────────────────────────────────────────────────────────────────────
