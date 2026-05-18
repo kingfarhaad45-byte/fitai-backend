@@ -195,6 +195,10 @@ app.post("/api/workouts", auth, async (req, res) => {
   try { res.json(await Workout.create({ ...req.body, userId:req.user.id })); }
   catch(e) { res.status(500).json({ error:e.message }); }
 });
+app.delete("/api/workouts/:id", auth, async (req, res) => {
+  try { await Workout.findOneAndDelete({ _id:req.params.id, userId:req.user.id }); res.json({ success:true }); }
+  catch(e) { res.status(500).json({ error:e.message }); }
+});
 
 // ── Weight ────────────────────────────────────────────────────────────────────
 app.get("/api/weight", auth, async (req, res) => {
